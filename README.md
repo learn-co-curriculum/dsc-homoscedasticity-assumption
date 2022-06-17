@@ -1,1 +1,6 @@
-# dsc-homoscedasticity-assumption
+# The Homoscedasticity Assumption
+
+
+```python
+
+```
