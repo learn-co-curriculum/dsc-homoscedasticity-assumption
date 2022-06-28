@@ -35,17 +35,18 @@ Here is an example with some synthetic data:
 ```python
 import matplotlib.pyplot as plt
 import numpy as np
+from sklearn.datasets import make_regression
 plt.style.use('seaborn-talk')
 
-# Generate synthetic y = -5x + 2 plus some noise
-np.random.seed(2)
-x_generated = np.linspace(start=0, stop=10, num=300) + np.random.normal(size=300)
-
-scale = 5
-y_generated = -5 * x_generated + 2 + np.random.normal(scale=scale, size=300)
+# Generate synthetic regression with predetermined gaussian noise
+scale = 10
+x_generated, y_generated, coef = make_regression(
+    n_samples=300, n_features=1, coef=True, noise=scale, random_state=8
+)
+y_generated += 50
 
 # We know the fit line because we generated the data (no need to model)
-fit_line_generated = -5 * x_generated + 2
+fit_line_generated = coef * x_generated.flatten() + 50
 
 # We set the scale of the normal distribution, so we know that 99% of the
 # points should be captured by these lines (empirical rule)
@@ -72,6 +73,8 @@ ax.legend();
     
 
 
+You can tell that this is _homoscedastic_ (has equal variance) because the red lines (showing the distribution of the predictions vs. the real data points) are parallel to the best-fit line.
+
 And here's an example using the auto MPG data:
 
 
@@ -97,16 +100,15 @@ fit_line_mpg = slope * x_mpg + intercept
 # through trial and error with hard-coded values, then creating a
 # spline to make a smoothed appearance)
 x_quantiles = [x_mpg.quantile(q) for q in np.linspace(0, 1, 5)]
-top_spline = make_interp_spline(x_quantiles, [17, 37, 40, 42, 45], k=3)
-top_line = top_spline(x_mpg.sort_values())
-bottom_spline = make_interp_spline(x_quantiles, [12, 9, 10, 12, 25], k=3)
+top_line = fit_line_mpg + 17
+bottom_spline = make_interp_spline(x_quantiles, [11, 7, 7, 8, 20], k=3)
 bottom_line = bottom_spline(x_mpg.sort_values())
 
 # Plot data and lines
 fig, ax = plt.subplots()
 ax.scatter(x_mpg, y_mpg, color="mediumaquamarine", alpha=0.5, label="data points")
 ax.plot(x_mpg, fit_line_mpg, color="gray", label="best-fit line")
-ax.plot(x_mpg.sort_values(), top_line, color="orange")
+ax.plot(x_mpg, top_line, color="orange")
 ax.plot(x_mpg.sort_values(), bottom_line, color="orange")
 
 # Customize labels
@@ -122,6 +124,8 @@ ax.legend();
     
 
 
+You can tell that this is _heteroscedastic_ because of the cone shape on the bottom. The top looks fairly linear, but the fact that the top and bottom don't match is an indication that something is wrong with the model specification (e.g. a non-linear relationship).
+
 #### Note About Red/Orange Lines
 
 The red/orange lines on these plots are intended to help you understand what you should be looking for. You DO NOT need to plot lines like this; you can just create a scatter plot and then visually inspect for these patterns.
@@ -130,7 +134,7 @@ The red/orange lines on these plots are intended to help you understand what you
 
 For multiple regression it won't work to plot the features vs. target in 2D like this. So, a plot that works for either simple or multiple regression is a **residuals plot**. This means the target value will be along the x-axis while the residuals will be along the y-axis.
 
-Now instead of the orange lines being parallel to a diagonal best-fit line, they should simply be horizontal.
+Now instead of the orange lines being parallel to a diagonal best-fit line, they should simply be horizontal. This can mean that it's a bit easier to interpret compared to the feature vs. target plots above, even for simple linear regression.
 
 Here is an example with some synthetic data:
 
@@ -140,12 +144,7 @@ resids_generated = y_generated - fit_line_generated
 
 # Create scatter plot of data
 fig, ax = plt.subplots()
-ax.scatter(y_generated, resids_generated, color="mediumaquamarine", alpha=0.5)
-
-# Change "zoom level" to avoid artifacts of data generation (would not be
-# necessary or helpful for real data)
-ax.set_xlim(-40,-8)
-ax.set_ylim(-25, 25)
+ax.scatter(fit_line_generated, resids_generated, color="mediumaquamarine", alpha=0.5)
 
 # Plot horizontal lines
 ax.axhline(y=0, color="black")
@@ -164,23 +163,23 @@ ax.set_title("Homoscedastic Residual Plot");
     
 
 
+Now, instead of looking for the lines to be parallel to the best-fit line, we can simply look at whether the lines are horizontal. Because the red lines here are horizontal, we can tell that this is _homoscedastic_.
+
 And here's an example using the auto MPG data:
 
 
 ```python
 # Create scatter plot of data
 fig, ax = plt.subplots()
-ax.scatter(y_mpg, results.resid, color="mediumaquamarine", alpha=0.5)
+ax.scatter(fit_line_mpg, results.resid, color="mediumaquamarine", alpha=0.5)
 ax.axhline(y=0, color="black")
 
 # Again, plotting an approximation
-y_quantiles = [y_mpg.quantile(q) for q in np.linspace(0, 1, 5)]
-top_spline = make_interp_spline(y_quantiles, [-8, 5, 7, 13, 25], k=3)
-top_line = top_spline(y_mpg.sort_values())
-bottom_spline = make_interp_spline(y_quantiles, [-20, -18, -15, -7, 5], k=3)
-bottom_line = bottom_spline(y_mpg.sort_values())
-ax.plot(y_mpg.sort_values(), top_line, color="orange")
-ax.plot(y_mpg.sort_values(), bottom_line, color="orange")
+y_quantiles = [fit_line_mpg.quantile(q) for q in np.linspace(0, 1, 5)]
+bottom_spline = make_interp_spline(y_quantiles, [-3, -14, -16, -17, -17], k=3)
+bottom_line = bottom_spline(fit_line_mpg.sort_values())
+ax.plot([fit_line_mpg.min(), fit_line_mpg.max()], [17, 17], color="orange")
+ax.plot(fit_line_mpg.sort_values(), bottom_line, color="orange")
 
 # Customize labels
 ax.set_xlabel("y")
@@ -194,26 +193,110 @@ ax.set_title("Heteroscedastic Residual Plot");
     
 
 
+Here the "cone" shape on the bottom is easier to see. Because of this shape (meaning that the variance in the residuals is increasing as `y` increases, rather than being consistent) we can tell that this is _heteroscedastic_.
+
 ## Statistical Testing for Homoscedasticity
 
 Several statistical tests are available for checking homoscedasticity of residuals.
 
 #### Goldfeld-Quandt Test
 
-One popular statistical test for homoscedasticity is the [Goldfeld-Quandt test](https://en.wikipedia.org/wiki/Goldfeld%E2%80%93Quandt_test), which divides the dataset into two groups to compare their variance. There is a StatsModels implementation ([documentation here](https://www.statsmodels.org/stable/generated/statsmodels.stats.diagnostic.het_goldfeldquandt.html)) that returns:
+One popular statistical test for homoscedasticity is the [Goldfeld-Quandt test](https://en.wikipedia.org/wiki/Goldfeld%E2%80%93Quandt_test), which divides the dataset into two groups, then finds the MSE of the residuals for each group. The ratio of the second group's `mse_resid` divided by the first group's `mse_resid` becomes a statistic that can be compared to the f-distribution to find a p-value.
+
+There is a StatsModels implementation ([documentation here](https://www.statsmodels.org/stable/generated/statsmodels.stats.diagnostic.het_goldfeldquandt.html)) that returns:
 
 1. Goldfeld-Quandt test statistic
 2. Goldfeld-Quandt test p-value
 3. Ordering
 
+(Ordering relates to the direction of the heteroscedasticity you want to be able to detect. By default it is `'increasing'` but you can also specify `'decreasing'` or `'two-sided'`.)
+
+This implementation actually creates models and computes residuals for each subset of the dataset, so you pass in the target and features, not the residuals.
+
+
+```python
+from statsmodels.stats.diagnostic import het_goldfeldquandt
+```
+
+
+```python
+het_goldfeldquandt(y_generated, x_generated, alternative='two-sided')
+```
+
+
+
+
+    (1.064941143291257, 0.7014676435876456, 'two-sided')
+
+
+
+
+```python
+het_goldfeldquandt(y_mpg, x_mpg.values.reshape(-1,1), alternative='two-sided')
+```
+
+
+
+
+    (2.423945504791773, 1.22044607975262e-09, 'two-sided')
+
+
+
+The null hypothesis for this test is homoscedasticity, i.e. that the variance in the residuals neither increases nor decreases as the sub-sample changes.
+
+For the generated data, we have a p-value of about 0.7, so we fail to reject the null hypothesis at an alpha of 0.05. This means we consider the generated data to be homoscedastic.
+
+For the auto MPG data, we have a p-value of about .000000001, so we reject the null hypothesis at an alpha of 0.05. This means we consider the auto MPG data to be heteroscedastic.
+
 #### Breusch-Pagan Test
 
-Another popular statistical test for homoscedasticity is the [Breusch-Pagan test](https://en.wikipedia.org/wiki/Breusch%E2%80%93Pagan_test). It is a type of $\chi^2$ test based on the [Lagrange multiplier test](https://en.wikipedia.org/wiki/Score_test). There is a StatsModels implementation ([documentation here](https://www.statsmodels.org/stable/generated/statsmodels.stats.diagnostic.het_breuschpagan.html)) that returns:
+Another popular statistical test for homoscedasticity is the [Breusch-Pagan test](https://en.wikipedia.org/wiki/Breusch%E2%80%93Pagan_test). It is a type of $\chi^2$ test based on the [Lagrange multiplier test](https://en.wikipedia.org/wiki/Score_test) and the underlying concept is that you are trying to see whether you can linearly predict the residuals using the provided features.
+
+There is a StatsModels implementation ([documentation here](https://www.statsmodels.org/stable/generated/statsmodels.stats.diagnostic.het_breuschpagan.html)) that returns:
 
 1. Lagrange multiplier statistic
 2. Lagrange multiplier p-value
 3. Breusch-Pagan test statistic
 4. Breusch-Pagan test p-value
+
+This implementation expects you to pass in the residuals as the first argument and the features (including a constant) as the second argument.
+
+
+```python
+from statsmodels.stats.diagnostic import het_breuschpagan
+```
+
+
+```python
+het_breuschpagan(sm.OLS(y_generated, sm.add_constant(x_generated)).fit().resid, sm.add_constant(x_generated))
+```
+
+
+
+
+    (0.1956987661898224,
+     0.6582153107631223,
+     0.1945209994805444,
+     0.6594999728629689)
+
+
+
+
+```python
+het_breuschpagan(results.resid, sm.add_constant(x_mpg))
+```
+
+
+
+
+    (6.023194926772518,
+     0.014119064285488344,
+     6.085977163823662,
+     0.014054760063763048)
+
+
+
+One again the null hypothesis is homoscedasticity, which we fail to reject for the generated data and reject for the auto MPG data.
 
 #### Other Tests
 
