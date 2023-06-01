@@ -36,7 +36,7 @@ Here is an example with some synthetic data:
 import matplotlib.pyplot as plt
 import numpy as np
 from sklearn.datasets import make_regression
-plt.style.use('seaborn-talk')
+plt.style.use('seaborn-v0_8-whitegrid')
 
 # Generate synthetic regression with predetermined gaussian noise
 scale = 10
